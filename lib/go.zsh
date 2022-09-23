@@ -26,7 +26,7 @@ function _you::go {
   local session_name=$(basename $dir_name | sed 's/\./_/')
 
   [[ $(pgrep tmux) ]] || {tmux new-session -s $session_name -c $dir_name; return 0}
-  tmux has -t "$session_name" 2> /dev/null
+  tmux list-sessions | grep -w "$session_name" 2> /dev/null
   (($? == 1)) && tmux new-session -d -s $session_name -c $dir_name
   [[ $TMUX ]] && tmux switch-client -t $session_name || tmux attach-session -t $session_name -c $reslt
 }
