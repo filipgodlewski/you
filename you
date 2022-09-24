@@ -4,6 +4,13 @@
 emulate -LR zsh
 setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
 
+# Redefine if 'you' is used as a script, not a plugin
+if [[ $0 != you || -n $ZSH_SCRIPT ]]; then
+  0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
+  0="${${(M)0:#/*}:-$PWD/$0}"
+  0="${0##*/}"
+fi
+
 # Don't leak any functions
 typeset -g dotef
 dotef=( ${(k)functions} )
@@ -66,5 +73,5 @@ function .you::go {
 
 (($# == 0 && $#opt_help)) && {+$0; return 0}
 
-local cmd="$1"; shift 1
+local cmd="$1"; shift
 (($#opt_help)) && .$0::$cmd "$@" --help || .$0::$cmd "$@"
