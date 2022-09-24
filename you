@@ -71,7 +71,7 @@ function .you::go {
   [[ $TMUX ]] && tmux switch-client -t $session_name || tmux attach-session -t $session_name -c $reslt
 }
 
-(($# == 0 && $#opt_help)) && {+$0; return 0}
+(($# == 0 || $#opt_help)) && {+$0; return 0}
 
 local cmd="$1"; shift
 (($#opt_help)) && .$0::$cmd "$@" --help || .$0::$cmd "$@"
