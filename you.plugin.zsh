@@ -1,8 +1,11 @@
 #! /usr/bin/env zsh
 
-[[ -z "$YOU_PLUG" ]] && export YOU_PLUG="${${(%):-%x}:a:h}"
+0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
+0="${${(M)0:#/*}:-$PWD/$0}"
 
-for config_file ("$YOU_PLUG"/lib/**/*.zsh); do
-    source "$config_file"
-done
-unset config_file
+typeset -g YOU_BASE_DIR="${0:h}"
+
+if [[ ${zsh_loaded_plugins[-1]} != */you && -z ${fpath[(r)${0:h}]} ]]; then
+  fpath+=("${0:h}")
+fi
+autoload you
