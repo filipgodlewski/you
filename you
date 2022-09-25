@@ -57,18 +57,23 @@ EOF
 }
 
 function .you::go {
-  local opt_help
-  zparseopts -D -F -K -- {h,-help}=opt_help
+  local opt_help opt_cmd opt_query
+  zparseopts -D -F -K -- {h,-help}=opt_help {c,-command}:=opt_cmd {q,-query}:=opt_query
 
   (($#opt_help)) && {$0::help; return 0}
-  (($#)) && local dir_name=$(zoxide query "$@") || local dir_name=$(zoxide query -l | fzf)
-  (($#dir_name)) || {echo "No results for the query '$@'.\nMaybe zoxide did not index this directory yet."; return 1}
+  (($#opt_query)) && local dir_name=$(zoxide query "$opt_query[-1]") || local dir_name=$(zoxide query -l | fzf)
+  (($#dir_name)) || {
+    echo "No results for the query '$opt_query[-1]'.";
+    echo "Maybe zoxide did not index this directory yet.";
+    return 1
+  }
   local session_name=$(basename $dir_name | sed 's/\./_/')
 
   [[ $(pgrep tmux) ]] || {tmux new-session -s $session_name -c $dir_name; return 0}
   tmux list-sessions | grep -w "$session_name" &> /dev/null
   (($? == 1)) && tmux new-session -d -s $session_name -c $dir_name
-  [[ $TMUX ]] && tmux switch-client -t $session_name || tmux attach-session -t $session_name -c $reslt
+  (($#opt_cmd)) && tmux send-keys -t $session_name:0.0 $opt_cmd[-1] Enter
+  [[ $TMUX ]] && tmux switch-client -t $session_name || tmux attach-session -t $session_name -c $dir_name
 }
 
 (($# == 0 || $#opt_help)) && {+$0; return 0}
