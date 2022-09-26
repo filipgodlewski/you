@@ -33,24 +33,83 @@ OPTIONS:
     -h, --help                        Show this message.
 
 SUBCOMMANDS:
-    go <QUERY>                        Open directory in a new tmux session, or attach.
+    cheat                             Show a cht.sh result in a new tmux pane.
+    delete                            Delete selected tmux session(s).
+    go                                Open directory in a new tmux session, or attach.
+    man                               Show a selected man page in a new tmux pane.
+    select                            Switch to another tmux session.
 EOF
   return 0
+}
+
+function .you::select {
+  # local opt_help
+  # zparseopts -D -F -K -- {h,-help}=opt_help
+  #
+  # (($#opt_help)) && {$0::help; return 0}
+
+  local session_name=$(tmux list-sessions -F "#S" | fzf)
+  (($#session_name)) || return 0
+  [[ $TMUX ]] && local cmd="switch-client" || local cmd="attach-session"
+  tmux $cmd -t $session_name
+}
+
+function .you::delete {
+  # local opt_help
+  # zparseopts -D -F -K -- {h,-help}=opt_help
+  #
+  # (($#opt_help)) && {$0::help; return 0}
+
+  local session_names=($(tmux list-sessions -F "#S" | fzf -m))
+  (($#session_names)) || return 0
+  local session_name
+  for session_name in $session_names; do
+    tmux kill-session -t $session_name
+  done
+}
+
+function .you::cheat {
+  local opt_help opt_vertical
+  zparseopts -D -F -K -- {h,-help}=opt_help {v,-vertical}=opt_vertical
+
+  (($#opt_help)) && {$0::help; return 0}
+
+  local cached_list=$XDG_CACHE_HOME/cht.sh/:list
+  [[ ! -d ${cached_list%/*} ]] && mkdir -p ${cached_list%*/}
+  [[ ! -f $cached_list || $#opt_update ]] && curl -s -o $cached_list "cht.sh/:list"
+  local query=$(cat $cached_list | fzf)
+  (($#query)) || return 0
+  (($#opt_vertical)) && local layout="-h" || local layout="-v"
+  local cached_query_file=${cached_list%/*}/$query
+  [[ ! -f $cached_query_file ]] && curl -s -o $cached_query_file "cht.sh/$query"
+  .you::_one_off_pane $layout "cat ${cached_list%/*}/$query | moar"
+}
+
+function .you::man {
+  local opt_help
+  zparseopts -D -F -K -- {h,-help}=opt_help {v,-vertical}=opt_vertical
+
+  (($#opt_help)) && {$0::help; return 0}
+
+  local app=$(man -k . | fzf)
+  (($#app)) || return 0
+  local app=$(echo $app | awk '{sub(/\(.*\)/, ""); print $1}')
+  [[ $(man --path $app &> /dev/null) ]] && local cmd="man $app" || local cmd="$app --help | moar"
+  (($#opt_vertical)) && local layout="-h" || local layout="-v"
+  .you::_one_off_pane $layout $cmd
 }
 
 
 function +you::go {
   cat >&2 <<EOF
 USAGE:
-    ${(j: :)${(s.::.)0#+}} [QUERY]
+    ${(j: :)${(s.::.)0#+}} [options]
 
     Open queried directory in either a new tmux session, if it doesn't exist,
     or attach to an existing one. Uses zoxide to query.
 
-ARGS:
-    <QUERY>      Either the name of the directory or something that will let zoxide find it.
-
 OPTIONS:
+    -q, --query                       Either the name of the directory or something that will let zoxide find it.
     -h, --help                        Show this message.
 EOF
   return 0
@@ -61,6 +120,7 @@ function .you::go {
   zparseopts -D -F -K -- {h,-help}=opt_help {c,-command}:=opt_cmd {q,-query}:=opt_query
 
   (($#opt_help)) && {$0::help; return 0}
+
   (($#opt_query)) && local dir_name=$(zoxide query "$opt_query[-1]") || local dir_name=$(zoxide query -l | fzf)
   (($#dir_name)) || {
     echo "No results for the query '$opt_query[-1]'.";
@@ -68,12 +128,24 @@ function .you::go {
     return 1
   }
   local session_name=$(basename $dir_name | sed 's/\./_/')
+  .you::_session $dir_name $session_name $opt_cmd[-1]
+}
 
-  [[ $(pgrep tmux) ]] || {tmux new-session -s $session_name -c $dir_name; return 0}
-  tmux list-sessions | grep -w "$session_name" &> /dev/null
-  (($? == 1)) && tmux new-session -d -s $session_name -c $dir_name
-  (($#opt_cmd)) && tmux send-keys -t $session_name:0.0 $opt_cmd[-1] Enter
-  [[ $TMUX ]] && tmux switch-client -t $session_name || tmux attach-session -t $session_name -c $dir_name
+function .you::_one_off_pane {
+  local opt_layout=$1 opt_cmd=$2
+  [[ $TMUX ]] || {echo "Not in a tmux session. Attach first."; return 1}
+  tmux split-window $opt_layout $opt_cmd
+}
+
+function .you::_session {
+  local dir_name=$1 session_name=$2 opt_cmd=$3
+  tmux list-sessions -F "#S" | grep -w "$session_name" &> /dev/null
+  (($? == 1)) && {
+    tmux new-session -d -s $session_name -c $dir_name
+    (($#opt_cmd)) && tmux send-keys -t $session_name:0.0 $opt_cmd Enter
+  }
+  [[ $TMUX ]] && local cmd="switch-client" || local cmd="attach-session"
+  tmux $cmd -t $session_name
 }
 
 (($# == 0 || $#opt_help)) && {+$0; return 0}
