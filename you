@@ -127,6 +127,7 @@ function .you::go {
     echo "Maybe zoxide did not index this directory yet.";
     return 1
   }
+  zoxide add $dir_name
   local session_name=$(basename $dir_name | sed 's/\./_/')
   .you::_session $dir_name $session_name $opt_cmd[-1]
 }
